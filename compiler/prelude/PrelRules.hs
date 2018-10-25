@@ -1300,6 +1300,19 @@ builtinIntegerRules =
            = BuiltinRule { ru_name = fsLit str, ru_fn = name, ru_nargs = 2,
                            ru_try = match_rationalTo mkLit }
 
+
+        -- negateNaturalName,
+        -- signumNaturalName,
+        --
+        -- quotRemIntegerName,
+        -- quotIntegerName, remIntegerName,
+        --
+        -- andNaturalName, orNaturalName, xorNaturalName,
+        --
+        -- shiftLNaturalName, shiftRNaturalName, bitNaturalName,
+        -- testBitNaturalName,
+        -- popCountNaturalName,
+
 builtinNaturalRules :: [CoreRule]
 builtinNaturalRules =
  [rule_binop              "plusNatural"        plusNaturalName         (+)
@@ -1308,13 +1321,51 @@ builtinNaturalRules =
  ,rule_NaturalFromInteger "naturalFromInteger" naturalFromIntegerName
  ,rule_NaturalToInteger   "naturalToInteger"   naturalToIntegerName
  ,rule_WordToNatural      "wordToNatural"      wordToNaturalName
+
+ ,rule_binop              "andNatural"         andNaturalName        (.&&.)
+ ,rule_binop              "orNatural"          orNaturalName         (.||.)
+ ,rule_binop              "xorNatural"         xorNaturalName        xor
+
+ ,rule_divop_one          "quotNatural"        quotNaturalName       quot
+ ,rule_divop_one          "remNatural"         remNaturalName        rem
+ ,rule_divop_both         "quotRemNatural"     quotRemNaturalName    quotRem
+
+ ,rule_shift_op           "shiftLNatural"      shiftLNaturalName     shiftL
+ ,rule_shift_op           "shiftRNatural"      shiftRNaturalName     shiftR
+ ,rule_bitNatural         "bitNatural"         bitNaturalName
+ ,rule_testBit            "testBitNatural"     testBitNaturalName
+ ,rule_popCount           "popCountNatural"    popCountNaturalName
+ ,rule_unop               "signumNatural"      signumNaturalName     signum
+
  ]
-    where rule_binop str name op
+    where rule_bitNatural str name
+           = BuiltinRule { ru_name = fsLit str, ru_fn = name, ru_nargs = 1,
+                           ru_try = match_bitNatural }
+          rule_unop str name op
+           = BuiltinRule { ru_name = fsLit str, ru_fn = name, ru_nargs = 1,
+                           ru_try = match_Natural_unop op }
+          rule_binop str name op
            = BuiltinRule { ru_name = fsLit str, ru_fn = name, ru_nargs = 2,
                            ru_try = match_Natural_binop op }
           rule_partial_binop str name op
            = BuiltinRule { ru_name = fsLit str, ru_fn = name, ru_nargs = 2,
                            ru_try = match_Natural_partial_binop op }
+          rule_divop_both str name op
+           = BuiltinRule { ru_name = fsLit str, ru_fn = name, ru_nargs = 2,
+                           ru_try = match_Natural_divop_both op }
+          rule_divop_one str name op
+           = BuiltinRule { ru_name = fsLit str, ru_fn = name, ru_nargs = 2,
+                           ru_try = match_Natural_divop_one op }
+          rule_shift_op str name op
+           = BuiltinRule { ru_name = fsLit str, ru_fn = name, ru_nargs = 2,
+                           ru_try = match_Natural_shift_op op }
+          rule_testBit str name op
+           = BuiltinRule { ru_name = fsLit str, ru_fn = name, ru_nargs = 2,
+                           ru_try = match_Natural_testBit }
+          rule_popCount str name op
+           = BuiltinRule { ru_name = fsLit str, ru_fn = name, ru_nargs = 1,
+                           ru_try = match_Natural_popCount }
+
           rule_NaturalToInteger str name
            = BuiltinRule { ru_name = fsLit str, ru_fn = name, ru_nargs = 1,
                            ru_try = match_NaturalToInteger }
@@ -1526,6 +1577,12 @@ match_Integer_unop unop _ id_unf _ [xl]
   = Just (Lit (LitNumber LitNumInteger (unop x) i))
 match_Integer_unop _ _ _ _ _ = Nothing
 
+match_Natural_unop :: (Integer -> Integer) -> RuleFun
+match_Natural_unop unop _ id_unf _ [xl]
+  | Just (LitNumber LitNumNatural x i) <- exprIsLiteral_maybe id_unf xl
+  = Just (Lit (LitNumber LitNumNatural (unop x) i))
+match_Natural_unop _ _ _ _ _ = Nothing
+
 match_IntToInteger_unop :: (Integer -> Integer) -> RuleFun
 match_IntToInteger_unop unop _ id_unf fn [xl]
   | Just (LitNumber LitNumInt x _) <- exprIsLiteral_maybe id_unf xl
@@ -1569,6 +1626,16 @@ match_Integer_divop_both divop _ id_unf _ [xl,yl]
   = Just $ mkCoreUbxTup [t,t] [Lit (mkLitInteger r t), Lit (mkLitInteger s t)]
 match_Integer_divop_both _ _ _ _ _ = Nothing
 
+match_Natural_divop_both
+   :: (Integer -> Integer -> (Integer, Integer)) -> RuleFun
+match_Natural_divop_both divop _ id_unf _ [xl,yl]
+  | Just (LitNumber LitNumNatural x t) <- exprIsLiteral_maybe id_unf xl
+  , Just (LitNumber LitNumNatural y _) <- exprIsLiteral_maybe id_unf yl
+  , y /= 0
+  , (r,s) <- x `divop` y
+  = Just $ mkCoreUbxTup [t,t] [Lit (mkLitNatural r t), Lit (mkLitNatural s t)]
+match_Natural_divop_both _ _ _ _ _ = Nothing
+
 -- This helper is used for the quot and rem functions
 match_Integer_divop_one :: (Integer -> Integer -> Integer) -> RuleFun
 match_Integer_divop_one divop _ id_unf _ [xl,yl]
@@ -1577,6 +1644,15 @@ match_Integer_divop_one divop _ id_unf _ [xl,yl]
   , y /= 0
   = Just (Lit (mkLitInteger (x `divop` y) i))
 match_Integer_divop_one _ _ _ _ _ = Nothing
+
+match_Natural_divop_one :: (Integer -> Integer -> Integer) -> RuleFun
+match_Natural_divop_one divop _ id_unf _ [xl,yl]
+  | Just (LitNumber LitNumNatural x i) <- exprIsLiteral_maybe id_unf xl
+  , Just (LitNumber LitNumNatural y _) <- exprIsLiteral_maybe id_unf yl
+  , y /= 0
+  = Just (Lit (mkLitNatural (x `divop` y) i))
+match_Natural_divop_one _ _ _ _ _ = Nothing
+
 
 match_Integer_shift_op :: (Integer -> Int -> Integer) -> RuleFun
 -- Used for shiftLInteger, shiftRInteger :: Integer -> Int# -> Integer
@@ -1590,6 +1666,21 @@ match_Integer_shift_op binop _ id_unf _ [xl,yl]
              -- (Trac #15673)
   = Just (Lit (mkLitInteger (x `binop` fromIntegral y) i))
 match_Integer_shift_op _ _ _ _ _ = Nothing
+
+match_Natural_shift_op :: (Integer -> Int -> Integer) -> RuleFun
+match_Natural_shift_op binop _ id_unf _ [xl,yl]
+  | Just (LitNumber LitNumNatural x i) <- exprIsLiteral_maybe id_unf xl
+  , Just (LitNumber LitNumInt y _)     <- exprIsLiteral_maybe id_unf yl
+  , y >= 0
+  , y <= 4   -- Restrict constant-folding of shifts on Integers, somewhat
+             -- arbitrary.  We can get huge shifts in inaccessible code
+             -- (Trac #15673)
+  = Just (Lit (mkLitNatural (x `binop` fromIntegral y) i))
+match_Natural_shift_op _ _ _ _ _ = Nothing
+
+match_Natural_testBit :: RuleFun
+match_Natural_testBit _ id_unf _ [xl,yl]
+match_Natural_testBit _ _ _ _ _ = Nothing
 
 match_Integer_binop_Prim :: (Integer -> Integer -> Bool) -> RuleFun
 match_Integer_binop_Prim binop dflags id_unf _ [xl, yl]
