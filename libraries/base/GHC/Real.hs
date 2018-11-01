@@ -1,6 +1,6 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE CPP, NoImplicitPrelude, MagicHash, UnboxedTuples, BangPatterns #-}
-{-# OPTIONS_GHC -Wno-orphans #-}
+{-# OPTIONS_GHC -Wno-orphans -fno-worker-wrapper #-}
 {-# OPTIONS_HADDOCK hide #-}
 
 -----------------------------------------------------------------------------
@@ -471,12 +471,18 @@ instance  Integral Integer where
 instance Integral Natural where
     toInteger = naturalToInteger
 
+    {-# INLINE divMod #-}
     divMod = quotRemNatural
+    {-# INLINE div #-}
     div    = quotNatural
+    {-# INLINE mod #-}
     mod    = remNatural
 
+    {-# INLINE quotRem #-}
     quotRem = quotRemNatural
+    {-# INLINE quot #-}
     quot    = quotNatural
+    {-# INLINE rem #-}
     rem     = remNatural
 #else
 -- | @since 4.8.0.0
