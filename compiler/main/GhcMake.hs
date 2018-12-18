@@ -648,7 +648,7 @@ unload hsc_env stable_linkables -- Unload everthing *except* 'stable_linkables'
      modules near the bottom of the tree have not changed.
 
    - to tell GHCi when it can load object code: we can only load object code
-     for a module when we also load object code fo  all of the imports of the
+     for a module when we also load object code for all of the imports of the
      module.  So we need to know that we will definitely not be recompiling
      any of these modules, and we can use the object code.
 
